@@ -402,3 +402,4 @@ python bench/kazmmlu/kazmmlu.py --model-path models/Estimin3n --subset "Biology 
 - Hugging Face `transformers`, `datasets`, `trl`
 - Unsloth (эффективное дообучение в 4-битном режиме)
 - Сообщество KazMMLU
+- tsu
