@@ -2,7 +2,7 @@
 
 Estimin3n: SOTA open-source multimodal Kazakh audio/text-to-text LLM
 
-#№ Hardware support is provided in partnership with **ait🍅maton**
+## Hardware support is provided in partnership with **ait🍅maton**
 
 
 
