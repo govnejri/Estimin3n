@@ -1,136 +1,161 @@
-## Estimin3n — открытая мультимодальная казахская audio/text→text LLM (модель)
+## Estimin3n — Open-Source Multimodal Kazakh Audio/Text → Text LLM
 
-Estimin3n: SOTA opensource multimodal kazakh audio/text to text LLM
+Estimin3n: SOTA open-source multimodal Kazakh audio/text-to-text LLM
 
-Этот репозиторий модели Estimin3n содержит всё, что связано с моделью:
-- дообучение аудио-языковой базы Gemma 3N на собственных данных,
-- инференс (ASR/response) с использованием локально сохранённой модели,
-- оценку качества на аудио-датасетах (WER/CER) и KazMMLU.
+# Hardware support is provided in partnership with **ait🍅maton**
 
-Репозиторий ориентирован на русско- и казахскоязычные сценарии.
 
-### Содержание
-- Описание структуры репозитория
-- Требования и установка
-- Подготовка данных
-- Обучение (fine-tuning)
-- Инференс ASR/ответа
-- Бенчмарки: WER/CER и KazMMLU
-- Управление путями и конфигурацией
-- FAQ / Троблшутинг
+
+This repository contains everything related to the Estimin3n model:
+
+* Fine-tuning the Gemma 3N audio-language base model on custom data,
+* Inference (ASR/response) using a locally saved model,
+* Evaluation on audio datasets (WER/CER) and KazMMLU.
+
+The repository is focused on Kazakh/Russian language scenarios.
+
+### Contents
+
+* Repository structure overview
+* Requirements and installation
+* Data preparation
+* Training (fine-tuning)
+* ASR/response inference
+* Benchmarks: WER/CER and KazMMLU
+* Path and configuration management
+* FAQ / Troubleshooting
 
 ---
 
-### Структура репозитория
+### Repository Structure
+
 ```
 Estimin3n/
   bench/
     kazmmlu/
-      kazmmlu.py         # Бенчмарк на KazMMLU (множественный выбор)
+      kazmmlu.py         # KazMMLU benchmark (multiple-choice)
     wer/
-      benchmark.py       # Бенчмарк WER/CER по аудио-датасету
+      benchmark.py       # WER/CER benchmark on audio dataset
   data/
-    data_save.py         # Конвертация корпуса во внутренний формат HF DatasetDict
+    data_save.py         # Convert corpus into internal HF DatasetDict format
   inference/
-    test.py              # Инференс ASR/ответа для одиночного аудио
+    test.py              # ASR/response inference for a single audio file
   train/
-    finetune.py          # Дообучение Gemma 3N c Unsloth + TRL SFTTrainer
+    finetune.py          # Fine-tuning Gemma 3N with Unsloth + TRL SFTTrainer
   utils/
-    config.py            # Пути, дефолты и утилиты
-    merge_lora.py        # Слияние LoRA-адаптеров с базовой моделью
-    sample.wav           # Тестовый аудио-файл
-  models/                # (создаётся автоматически) сохранение финальной модели
-  outputs/               # (создаётся автоматически) чекпоинты/логи/отчёты
-  data/datasets/         # (создаётся автоматически) сохранённые HF датасеты
-  data/raw/              # (ожидаемая сырая структура корпуса)
+    config.py            # Paths, defaults, utilities
+    merge_lora.py        # Merge LoRA adapters with base model
+    sample.wav           # Test audio file
+  models/                # (auto-generated) stores final model
+  outputs/               # (auto-generated) checkpoints/logs/reports
+  data/datasets/         # (auto-generated) saved HF datasets
+  data/raw/              # (expected raw corpus structure)
 ```
 
 ---
 
-### Требования и установка
+### Requirements & Installation
 
-Рекомендуемые версии (ориентир):
-- Python 3.10+
-- CUDA-совместимый PyTorch
-- Библиотеки: transformers, datasets, soundfile, librosa, evaluate, jiwer, unsloth, peft, trl, tqdm, pandas
+Recommended versions:
 
-Пример установки (через pip):
+* Python 3.10+
+* CUDA-compatible PyTorch
+* Libraries: transformers, datasets, soundfile, librosa, evaluate, jiwer, unsloth, peft, trl, tqdm, pandas
+
+Example installation (via pip):
+
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu121  # подберите под вашу CUDA
+pip install torch --index-url https://download.pytorch.org/whl/cu121  # match your CUDA version
 pip install transformers datasets soundfile librosa evaluate jiwer unsloth peft trl tqdm pandas
 ```
 
-Если используете Windows, убедитесь, что установлены зависимости для `soundfile` (libsndfile) и `librosa`.
+If using Windows, make sure `soundfile` (libsndfile) and `librosa` dependencies are installed.
 
 ---
 
-### Управление путями и конфигурацией
-Ключевые пути и значения по умолчанию определены в `utils/config.py`:
-- `MODELS_DIR` → `models/`
-- `OUTPUTS_DIR` → `outputs/`
-- `DATA_DIR` → `data/`, `RAW_DATA_DIR` → `data/raw/`, `DATASETS_DIR` → `data/datasets/`
-- `DEFAULT_MODEL_PATH` → `models/Estimin3n`
-- `DEFAULT_DATASET_DIR` → `data/datasets/audio_dataset_with_text`
-- `DEFAULT_SAMPLE_WAV` → `utils/sample.wav`
+### Path & Configuration Management
 
-Утилита `ensure_dirs()` автоматически создаёт необходимые директории при запуске скриптов.
+Key paths and defaults are defined in `utils/config.py`:
+
+* `MODELS_DIR` → `models/`
+* `OUTPUTS_DIR` → `outputs/`
+* `DATA_DIR` → `data/`, `RAW_DATA_DIR` → `data/raw/`, `DATASETS_DIR` → `data/datasets/`
+* `DEFAULT_MODEL_PATH` → `models/Estimin3n`
+* `DEFAULT_DATASET_DIR` → `data/datasets/audio_dataset_with_text`
+* `DEFAULT_SAMPLE_WAV` → `utils/sample.wav`
+
+The `ensure_dirs()` utility automatically creates required directories when running scripts.
 
 ---
 
-### Подготовка данных
-Скрипт `data/data_save.py` обходит сырые данные и формирует HF DatasetDict.
+### Data Preparation
 
-Ожидаемая структура сырого корпуса (пример под `Kazakh_Speech_Corpus_2/ISSAI_KSC2_formatted`):
+Script: `data/data_save.py`
+It processes raw data and produces an HF DatasetDict.
+
+Expected raw corpus structure (example: `Kazakh_Speech_Corpus_2/ISSAI_KSC2_formatted`):
+
 ```
 data/raw/Kazakh_Speech_Corpus_2/ISSAI_KSC2_formatted/
   train/
-    **/*.flac + соответствующие .txt с транскриптом
+    **/*.flac + matching .txt transcripts
   validation/
     **/*.flac + .txt
   test/
     **/*.flac + .txt
 ```
 
-Запуск конвертации:
+Run conversion:
+
 ```bash
 python -m data.data_save
 ```
-Итоговый датасет сохранится в `data/datasets/audio_dataset_with_text`.
+
+The resulting dataset will be saved in `data/datasets/audio_dataset_with_text`.
 
 ---
 
-### Обучение (fine-tuning)
-Скрипт: `train/finetune.py`
+### Training (Fine-Tuning)
 
-Основные положения:
-- Загружается базовая Gemma 3N через `unsloth.FastModel`
-- Формируется тренировочный датасет с сообщениями вида system/user/assistant
-- Используется `trl.SFTTrainer` для SFT
-- Чекпоинты и логи в `outputs/`; финальная модель и процессор сохраняются в `models/Estimin3n`
+Script: `train/finetune.py`
 
-Запуск (пример):
+Key points:
+
+* Loads base Gemma 3N via `unsloth.FastModel`
+* Builds a training dataset with system/user/assistant-style messages
+* Uses `trl.SFTTrainer` for SFT
+* Saves checkpoints and logs in `outputs/`; final model and processor in `models/Estimin3n`
+
+Example run:
+
 ```bash
 python -m train.finetune
 ```
 
-После обучения можно объединить веса LoRA с базовой моделью:
+After training, you can merge LoRA weights into the base model:
+
 ```bash
 python -m utils.merge_lora
 ```
-Скрипт ожидает, что ваши адаптеры лежат в `outputs/checkpoint-10000` (переопределите путь при необходимости внутри файла).
+
+The script expects adapters in `outputs/checkpoint-10000` (change path if needed inside the file).
 
 ---
 
-### Инференс ASR/ответа
-Скрипт: `inference/test.py`
+### Inference (ASR/Response)
 
-Поддерживается два варианта запуска:
-1) Без аргументов — быстрый тест на `utils/sample.wav`:
+Script: `inference/test.py`
+
+Two usage modes:
+
+1. Without arguments — quick test on `utils/sample.wav`:
+
 ```bash
 python -m inference.test
 ```
 
-2) С указанием произвольного файла:
+2. With a custom file:
+
 ```bash
 python -m inference.test \
   --audio path/to/audio.wav \
@@ -140,16 +165,18 @@ python -m inference.test \
   --temperature 0.8
 ```
 
-Скрипт автоматически приведёт аудио к 16 кГц, моно, float32. Ответ генерируется моделью Gemma 3N через `apply_chat_template` и `generate`.
+The script automatically converts audio to 16kHz mono float32. Responses are generated by Gemma 3N using `apply_chat_template` and `generate`.
 
-Примечание: текущая версия `inference/test.py` содержит системный промпт под сценарий ответов колл-центра, а не буквальную транскрипцию. Для чистого ASR используйте логику из `bench/wer/benchmark.py` как ориентир (см. ниже).
+Note: Current `inference/test.py` includes a system prompt tailored for call-center response scenarios, not pure transcription. For ASR-only, refer to the logic in `bench/wer/benchmark.py`.
 
 ---
 
-### Бенчмарк WER/CER
-Скрипт: `bench/wer/benchmark.py`
+### WER/CER Benchmark
 
-Пример запуска:
+Script: `bench/wer/benchmark.py`
+
+Example run:
+
 ```bash
 python -m bench.wer.benchmark \
   --dataset_path data/datasets/audio_dataset_with_text \
@@ -163,18 +190,21 @@ python -m bench.wer.benchmark \
   --show-every 10
 ```
 
-Скрипт:
-- загружает датасет из `--dataset_path` (ожидается колонка `audio` и `text`),
-- приводит аудио к 16 кГц при необходимости,
-- считает промежуточные и итоговые WER/CER,
-- сохраняет логи в `outputs/` и печатает примеры.
+The script:
+
+* Loads dataset from `--dataset_path` (expects `audio` and `text` columns)
+* Converts audio to 16kHz if needed
+* Calculates intermediate and final WER/CER
+* Saves logs in `outputs/` and prints examples
 
 ---
 
-### Бенчмарк KazMMLU
-Скрипт: `bench/kazmmlu/kazmmlu.py`
+### KazMMLU Benchmark
 
-Пример запуска (все конфигурации):
+Script: `bench/kazmmlu/kazmmlu.py`
+
+Example run (all configs):
+
 ```bash
 python -m bench.kazmmlu.kazmmlu \
   --model-path models/Estimin3n \
@@ -187,26 +217,54 @@ python -m bench.kazmmlu.kazmmlu \
   --detailed_output_file outputs/kazmlu_detailed.tsv
 ```
 
-Опции фильтрации:
-- `--subset "Biology (High School in kaz)"`
-- `--kazakh-only`
-- `--russian-only`
+Filtering options:
 
-Результаты сохраняются в `outputs/` и печатается агрегированная статистика по точности.
+* `--subset "Biology (High School in kaz)"`
+* `--kazakh-only`
+* `--russian-only`
 
----
-
-### Частые проблемы
-- CUDA/torch несовместимость: установите совместимую сборку PyTorch для вашей версии CUDA.
-- Ошибки `soundfile/librosa`: установите системные зависимости (libsndfile) и убедитесь, что `numpy` совместимой версии.
-- Пустые ответы/токены: проверьте `max_new_tokens`, `temperature`, а также, что у процессора корректно выставлен `pad_token_id`.
-- Плохая транскрипция: убедитесь, что промпт действительно просит транскрипцию (см. `bench/wer/benchmark.py`) и что аудио 16 кГц моно.
+Results are saved in `outputs/` and aggregated accuracy statistics are printed.
 
 ---
 
-### Благодарности
-- Google Gemma 3n
-- Hugging Face `transformers`, `datasets`, `trl`, `unsloth`
-- Unsloth (эффективное дообучение в 4-битном режиме)
-- Сообщество KazMMLU
-- tsu
+### Common Issues
+
+* CUDA/torch incompatibility: install the correct PyTorch build for your CUDA version.
+* `soundfile/librosa` errors: install system dependencies (libsndfile) and check `numpy` version compatibility.
+* Empty responses/tokens: verify `max_new_tokens`, `temperature`, and `pad_token_id` in processor.
+* Poor transcription: ensure prompt explicitly requests transcription (see `bench/wer/benchmark.py`) and audio is 16kHz mono.
+
+---
+
+### Acknowledgements
+
+* Google Gemma 3N
+* Hugging Face `transformers`, `datasets`, `trl`, `unsloth`
+* Unsloth (efficient fine-tuning in 4-bit mode)
+* KazMMLU community
+* tsu
+
+### Citations
+
+If this project or its results are useful, please cite the KSC2 dataset paper:
+
+```
+@inproceedings{mussakhojayeva22_interspeech,
+title     = {KSC2: An Industrial-Scale Open-Source Kazakh Speech Corpus},
+author    = {Saida Mussakhojayeva and Yerbolat Khassanov and Huseyin {Atakan Varol}},
+year      = {2022},
+booktitle = {Interspeech 2022},
+pages     = {1367--1371},
+doi       = {10.21437/Interspeech.2022-421},
+issn      = {2958-1796},
+}
+```
+```
+@article{gemma_3n_2025,
+    title={Gemma 3n},
+    url={https://ai.google.dev/gemma/docs/gemma-3n},
+    publisher={Google DeepMind},
+    author={Gemma Team},
+    year={2025}
+}
+```
